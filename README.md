@@ -2,6 +2,7 @@
 ![license](https://img.shields.io/badge/license-MIT-green)
 ![platform](https://img.shields.io/badge/platform-Windows%2FWSL-orange)
 
+
 ## Table of Contents
 
 - [Yubikey-WSL](#yubikey-wsl)
@@ -36,7 +37,15 @@
     - [Symptom](#symptom)
     - [Quick Fix](#quick-fix)
     - [Robust Fix](#robust-fix)
-- [Tested On](#entire-guide-tested-on)
+
+--- 
+> 💡 *This guide focuses on SSH with YubiKey.*  
+>  
+> Related guides:  
+> • [YubiKey on WSL — GPG Signing Guide](./GPG_Signing_Guide.md)  
+> • [YubiKey on WSL — GitHub App Key Guide](./GitHub_App_Key_Guide.md)  
+  
+---
 
 # Yubikey-WSL
 A guide for working with the Yubikey 5 Series hardware keys in WSL2 on Windows 11. Many of these techniques can be applied to Linux, MacOS or Windows 11 as well. The baseline flow of this document will walk you through initial setup of the binaries and helpers required and then walk you through the generation of a private SSH key on the YubiKey itself. There are also sections further on in the guide for GPG signing for verified github commits and storage of Bot/service PEMs for GitHub Apps, etc..
