@@ -1,12 +1,130 @@
 ![status](https://img.shields.io/badge/status-docs--only-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
 ![platform](https://img.shields.io/badge/platform-Windows%2FWSL-orange)
-# Yubikey-WSL-SSH
-Step list for getting SSH to work from a Yubikey in WSL2 on Windows 11.
 
-On YubiKey 5 series devices, PIV slots starting at 82 are labeled “retired” by Yubico, but in practice they’re generic, safe slots well-suited for SSH keys.
+## Table of Contents
 
-## Why PIV and not FIDO2?
+- [Yubikey-WSL](#yubikey-wsl)
+  - [YubiKey slots](#yubikey-slots)
+  - [Remove YubiKey PIN defaults](#remove-yubikey-pin-defaults)
+    - [PIN](#pin)
+    - [PUK](#puk)
+    - [Recovery Scenarios](#recovery-scenarios)
+    - [Best Practices](#best-practices)
+  - [Why PIV and not FIDO2 for SSH?](#why-piv-and-not-fido2-for-ssh)
+    - [PIV vs FIDO2 Key Storage](#piv-vs-fido2-key-storage)
+- [Getting started with SSH](#getting-started-with-ssh)
+  - [Assumptions](#assumptions)
+  - [Windows Preparation](#windows-preparation)
+    - [Install usbipd-win](#install-usbipd-win)
+    - [Install YubiKey Manager](#install-yubikey-manager)
+    - [Load usbipd Helpers](#load-usbipd-helpers)
+  - [Attach YubiKey to WSL](#attach-yubikey-to-wsl)
+  - [WSL Setup](#wsl-setup)
+    - [Update and install required packages](#update-and-install-required-packages)
+    - [Start smart card daemon and check reader](#start-smart-card-daemon-and-check-reader)
+    - [Verify ykman inside WSL](#verify-ykman-inside-wsl)
+    - [Build and install libykcs11so from source](#build-and-install-libykcs11so-from-source)
+  - [Initialize PIV Slot 82](#initialize-piv-slot-82)
+  - [Extract SSH Public Key](#extract-ssh-public-key)
+  - [Add Key to GitHub](#add-key-to-github)
+  - [Configure SSH in WSL](#configure-ssh-in-wsl)
+  - [Test](#test)
+  - [Daily Use Notes](#daily-use-notes)
+- [Troubleshooting](#troubleshooting)
+  - [GPG and scdaemon can break SSH](#gpg-and-scdaemon-can-break-ssh)
+    - [Symptom](#symptom)
+    - [Fix](#fix)
+    - [Usage](#usage)
+- [Tested On](#tested-on)
+
+# Yubikey-WSL
+A guide for working with the Yubikey 5 Series hardware keys in WSL2 on Windows 11. Many of these techniques can be applied to Linux, MacOS or Windows 11 as well. The baseline flow of this document will walk you through initial setup of the binaries and helpers required and then walk you through the generation of a private SSH key on the YubiKey itself. There are also sections further on in the guide for GPG signing for verified github commits and storage of Bot/service PEMs for GitHub Apps, etc..
+
+For an added level of security, ideally all Yubikey adminstration would be done on an air-gapped system such as Tails running on the RAMDisk but this step is beyond the scope of this guide.
+
+## YubiKey slots
+
+The YubiKey 5 series runs several independent applets:  
+- **OpenPGP** – 3 fixed key slots (Signature, Encryption, Authentication).  
+- **PIV (Personal Identity Verification)** – Multiple slots (9a, 9c–9e, retired 82–95) for certificates/keys via PKCS#11.  
+- **FIDO2 / U2F** – Modern standard for web login and 2FA.  
+- **OATH** – TOTP/HOTP secrets, used with Yubico Authenticator.  
+- **OTP** – Legacy one-time password / static password applet.  
+
+This guide focuses on **OpenPGP** and **PIV**, which are needed for SSH, GPG signing, and certificates. **FIDO2**, **OATH**, and **OTP** are mainly for web authentication and will not be covered.  
+
+#### ⚠️ Note: 
+GPG can cause a lockout by taking exclusive control of the OpenPGP applet, interfering with PIV/PKCS#11 usage. The [workaround](#gpg-and-scdaemon-can-break-ssh) is to run a small helper shell function after using GPG so the key is freed again for SSH. 
+
+---
+
+On YubiKey 5 series devices, PIV slots starting at 82 are labeled “retired” by Yubico, but in practice they’re generic, safe slots well-suited for the following purposes:
+- SSH keys (GitHub, GitLab, infra access)
+- Bot/service PEMs (GitHub Apps, automation, TLS client certs)
+- VPN certificates (OpenVPN, WireGuard with PKCS#11)
+- Code-signing certificates (different repos/products)
+- Per-environment separation (dedicate slots by project/org/env)
+
+ YubiKey 5 series hardware keys also have 3 OpenPGP slots:
+
+- **Slot 1 (Signature)** – Sign files, emails, Git commits.  
+- **Slot 2 (Encryption)** – Decrypt emails/files.  
+- **Slot 3 (Authentication)** – General login/authentication (not used for SSH in this guide, since SSH will be handled via PIV slots with PKCS#11 for better compatibility and slot management).  
+
+Later in the guide we will use OpenPGP slot 1 for GitHub GPG-verified commits
+
+## Remove YubiKey PIN defaults
+If youhave not already done so, secure your YubiKey PIN and PUK
+
+#### PIN
+
+- **Purpose:** Required every time the YubiKey performs a private-key operation via PIV (e.g., SSH with PKCS#11).  
+- **Format:** Numeric only, length **6–8 digits**.  
+- **Default:** `123456`.
+
+**Change the PIN:**
+```bash
+ykman piv access change-pin
+```
+- Enter current PIN (default `123456` if never changed).  
+- Enter the new PIN (6–8 digits).  
+- Confirm the new PIN.
+
+---
+
+#### PUK
+
+- **Purpose:** Used to reset the PIN if it is forgotten. Also known as the  Admin PIN. 
+- **Format:** Numeric only, length **8 digits**.  
+- **Default:** `12345678`.
+
+**Change the PUK:**
+```bash
+ykman piv access change-puk
+```
+- Enter current PUK (default `12345678` if never changed).  
+- Enter the new PUK (8 digits).  
+- Confirm the new PUK.
+
+---
+
+#### Recovery Scenarios
+
+- **Forgot PIN:** Use the PUK to reset it.  
+- **Forgot PUK but still know PIN:** Device remains usable for daily operations, but if the PIN is lost in the future, the PIV applet must be reset.  
+- **Forgot both PIN and PUK:** The PIV applet must be reset, which **erases all keys** in PIV slots.
+
+---
+
+#### Best Practices
+
+- PIN and PUK **must** be changed from defaults on first use.  
+- Store both in the in a secure password vault such as KeepassXC, with a sealed paper backup held in another secure location or by your by IT/security department.  
+- Use different values for PIN and PUK.  
+- Never share PIN or PUK outside of approved storage methods.  
+
+## Why PIV and not FIDO2 for SSH?
  1. **Private key never leaves the YubiKey**
     - With PIV, the keypair is generated on the YubiKey itself in slot 82.
     - The private key is non-exportable by design — it can’t ever be written out to the host machine.
@@ -36,7 +154,8 @@ On YubiKey 5 series devices, PIV slots starting at 82 are labeled “retired” 
 PIV provides predictable, slot-based key management with more independent slots, making it easier to standardize usage across teams.  
 FIDO2 is credential-based with fewer total slots, less transparency, and requires newer OpenSSH tooling, though it offers modern security benefits.
 
-
+---
+# Getting started with SSH
 ## Assumptions
 - Windows 10/11 + WSL2 (Ubuntu/Debian).
 - You want RSA-2048 in PIV slot 82 via PKCS#11.
