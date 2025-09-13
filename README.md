@@ -5,45 +5,30 @@
 
 ## Table of Contents
 
-- [Yubikey-WSL](#yubikey-wsl)
-  - [YubiKey slots](#yubikey-slots)
-  - [Remove YubiKey PIN defaults](#remove-yubikey-pin-defaults)
-    - [PIN](#pin)
-    - [PUK](#puk)
-    - [Recovery Scenarios](#recovery-scenarios)
-    - [Best Practices](#best-practices)
-  - [Why PIV and not FIDO2 for SSH?](#why-piv-and-not-fido2-for-ssh)
-    - [PIV vs FIDO2 Key Storage](#piv-vs-fido2-key-storage)
-- [Getting started with SSH](#getting-started-with-ssh)
+- [YubiKey-WSL](#yubikey-wsl)
+  - [Slots](#yubikey-slots)
+  - [Remove PIN Defaults](#remove-yubikey-pin-defaults)
+  - [Why PIV for SSH?](#why-piv-and-not-fido2-for-ssh)
+- [Getting Started with SSH](#getting-started-with-ssh)
   - [Assumptions](#assumptions)
   - [Windows Preparation](#windows-preparation)
-    - [Install usbipd-win](#install-usbipd-win)
-    - [Install YubiKey Manager](#install-yubikey-manager)
-    - [Load usbipd Helpers](#load-usbipd-helpers)
   - [Attach YubiKey to WSL](#attach-yubikey-to-wsl)
   - [WSL Setup](#wsl-setup)
-    - [Update and install required packages](#update-and-install-required-packages)
-    - [Start smart card daemon and check reader](#start-smart-card-daemon-and-check-reader)
-    - [Verify ykman inside WSL](#verify-ykman-inside-wsl)
-    - [Build and install libykcs11so from source](#build-and-install-libykcs11so-from-source)
   - [Initialize PIV Slot 82](#initialize-piv-slot-82)
   - [Extract SSH Public Key](#extract-ssh-public-key)
   - [Add Key to GitHub](#add-key-to-github)
-  - [Configure SSH in WSL](#configure-ssh-in-wsl)
-  - [Test](#test)
-  - [Daily Use Notes](#daily-use-notes)
+  - [Configure SSH](#configure-ssh-in-wsl)
+  - [Test & Daily Use](#test)
 - [Troubleshooting](#troubleshooting)
-  - [GPG and scdaemon can break SSH](#gpg-and-scdaemon-can-break-ssh)
-    - [Symptom](#symptom)
-    - [Quick Fix](#quick-fix)
-    - [Robust Fix](#robust-fix)
+  - [GPG/scdaemon Conflicts](#gpg-and-scdaemon-can-break-ssh)
 
 --- 
-> 💡 *This guide focuses on SSH with YubiKey.*  
+> 💡 *__This guide focuses on SSH with YubiKey.__*  
 >  
 > Related guides:  
 > • [YubiKey on WSL — GPG Signing Guide](./GPG_Signing_Guide.md)  
-> • [YubiKey on WSL — GitHub App Key Guide](./GitHub_App_Key_Guide.md)  
+> • [YubiKey on WSL — GitHub App Key Guide (Part of the GitHub AI Workflow series)](./GitHub_App_Key_Guide.md) 
+> • [GitHub AI Workflow series](GitHub_AI_Workflow.md)
   
 ---
 
