@@ -326,12 +326,44 @@ You will be prompted for your Yubikey PIN. If you did not set a PIN then it will
 
 ---
 
-## Troubleshooting
+# Troubleshooting #
 - `pcsc_scan` should list the token.
 - `ssh-keygen -D /usr/local/lib/libykcs11.so` should show an `ssh-rsa` key.
 - **After sleep/hibernate:** Windows may re-enumerate USB devices and reclaim the YubiKey. Run `ykstatus` to confirm. If it shows "Attached to Windows", run `yk2wsl` again.
 
-## Tested On
+## ⚠️ GPG and scdaemon can break SSH ##
+
+When you use the YubiKey’s OpenPGP applet (for example, running `gpg --card-status`, generating keys, or listing keys), **GnuPG starts `scdaemon`** to manage the smart card.  
+The problem is: `scdaemon` takes exclusive control of the YubiKey, which prevents the PKCS#11 provider (`libykcs11.so`) from accessing the PIV slot.  
+
+## Symptom
+After using `gpg`, your SSH authentication suddenly fails — `ssh` can no longer see your YubiKey key.
+
+## Fix
+Kill `scdaemon` and restart the smart card service. Add this helper function to your shell config (`.zshrc` or `.bashrc`):
+
+```bash
+# Free YubiKey from scdaemon and restart pcscd so PKCS#11 can use it
+yk-ssh() {
+  gpgconf --kill scdaemon
+  # WSL/Ubuntu: restart smart-card service (requires sudo)
+  sudo service pcscd restart
+  echo "YubiKey released from scdaemon; PKCS#11 ready for SSH."
+}
+```
+
+Reload your shell after editing (`source ~/.zshrc` or `source ~/.bashrc`).  
+
+## Usage
+Whenever you finish using GPG commands (like creating or listing keys) and want to go back to SSH with PKCS#11, run:
+
+```bash
+yk-ssh
+```
+
+This will free the YubiKey from `scdaemon` and make SSH work again.
+
+# Tested On
 
 ![Windows 11 Pro 22H2](https://img.shields.io/badge/Windows-11%20Pro%2022H2-blue?logo=windows)
 ![WSL2 Ubuntu 22.04](https://img.shields.io/badge/WSL2-Ubuntu%2022.04-green?logo=ubuntu)
