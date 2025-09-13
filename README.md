@@ -1,3 +1,6 @@
+![status](https://img.shields.io/badge/status-docs--only-blue)
+![license](https://img.shields.io/badge/license-MIT-green)
+![platform](https://img.shields.io/badge/platform-Windows%2FWSL-orange)
 # Yubikey-WSL-SSH
 Step list for getting SSH to work from a Yubikey in WSL2 on Windows 11.
 
@@ -328,3 +331,12 @@ You will be prompted for your Yubikey PIN. If you did not set a PIN then it will
 - `ssh-keygen -D /usr/local/lib/libykcs11.so` should show an `ssh-rsa` key.
 - **After sleep/hibernate:** Windows may re-enumerate USB devices and reclaim the YubiKey. Run `ykstatus` to confirm. If it shows "Attached to Windows", run `yk2wsl` again.
 
+## Tested On
+
+![Windows 11 Pro 22H2](https://img.shields.io/badge/Windows-11%20Pro%2022H2-blue?logo=windows)
+![WSL2 Ubuntu 22.04](https://img.shields.io/badge/WSL2-Ubuntu%2022.04-green?logo=ubuntu)
+![YubiKey 5C NFC](https://img.shields.io/badge/YubiKey-5C%20NFC-yellow?logo=yubico)  
+
+![OpenSSH 8.9p1](https://img.shields.io/badge/OpenSSH-8.9p1-lightgrey?logo=openssh)
+![ykman 5.8.0](https://img.shields.io/badge/ykman-5.8.0-orange)
+![usbipd--win 5.2.0](https://img.shields.io/badge/usbipd--win-5.2.0-purple)
