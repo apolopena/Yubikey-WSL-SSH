@@ -1,7 +1,7 @@
 # Yubikey-WSL-SSH
 Step list for getting SSH to work from a Yubikey in WSL2 on Windows 11.
 
-Non "reserved" PIV slots on a Yubikey 5 series start with slot 82. Yubico labels these slots as RETIRED but really they are the safe generic storage areas for PIV.
+On YubiKey 5 series devices, PIV slots starting at 82 are labeled “retired” by Yubico, but in practice they’re generic, safe slots well-suited for SSH keys.
 
 ## Why PIV and not FIDO2?
  1. **Private key never leaves the YubiKey**
@@ -15,7 +15,7 @@ Non "reserved" PIV slots on a Yubikey 5 series start with slot 82. Yubico labels
  3. **Predictable slot management**
     - PIV gives you numbered slots (82 = “Retired Key 1”), so you can document exactly where a key lives.
     - That makes it easy to standardize across employees (e.g., “all GitHub keys go in slot 82”).
-    - FIDO2 doesn’t expose slot numbers in the same way, rther it's system is more opaque.
+    - FIDO2 doesn’t expose slot numbers in the same way, rather, its system is more opaque.
    
 ### PIV vs FIDO2 Key Storage
   
@@ -37,7 +37,7 @@ FIDO2 is credential-based with fewer total slots, less transparency, and require
 ## Assumptions
 - Windows 10/11 + WSL2 (Ubuntu/Debian).
 - You want RSA-2048 in PIV slot 82 via PKCS#11.
-- You already have a YubiKey inserted into the usb port of your machine.
+- You already have a YubiKey inserted into the USB port of your computer or device.
 
 ---
 
@@ -313,7 +313,7 @@ ssh -T git@github.com
 ```
 
 Expected:
-You will be prompted for your Yubikey PIN. If you did not set a PIN then it will be the default 123456. After entering the PIN youy should see:
+You will be prompted for your Yubikey PIN. If you did not set a PIN then it will be the default 123456. After entering the PIN you should see:
 `Hi <your_user>! You’ve successfully authenticated, but GitHub does not provide shell access.`
 
 ---
