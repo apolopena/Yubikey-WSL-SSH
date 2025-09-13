@@ -34,9 +34,9 @@
 - [Troubleshooting](#troubleshooting)
   - [GPG and scdaemon can break SSH](#gpg-and-scdaemon-can-break-ssh)
     - [Symptom](#symptom)
-    - [Fix](#fix)
-    - [Usage](#usage)
-- [Tested On](#tested-on)
+    - [Quick Fix](#quick-fix)
+    - [Robust Fix](#robust-fix)
+- [Tested On](#entire-guide-tested-on)
 
 # Yubikey-WSL
 A guide for working with the Yubikey 5 Series hardware keys in WSL2 on Windows 11. Many of these techniques can be applied to Linux, MacOS or Windows 11 as well. The baseline flow of this document will walk you through initial setup of the binaries and helpers required and then walk you through the generation of a private SSH key on the YubiKey itself. There are also sections further on in the guide for GPG signing for verified github commits and storage of Bot/service PEMs for GitHub Apps, etc..
@@ -458,7 +458,7 @@ The problem is: `scdaemon` takes exclusive control of the YubiKey, which prevent
 ## Symptom
 After using `gpg`, your SSH authentication suddenly fails — `ssh` can no longer see your YubiKey key.
 
-## Fix
+## Quick Fix
 Kill `scdaemon` and restart the smart card service. Add this helper function to your shell config (`.zshrc` or `.bashrc`):
 
 ```bash
@@ -480,9 +480,76 @@ Whenever you finish using GPG commands (like creating or listing keys) and want 
 yk-ssh
 ```
 
-This will free the YubiKey from `scdaemon` and make SSH work again.
+## Robust Fix
+### Git Post-Commit Hook for YubiKey/GPG
 
-# Tested On
+GPG and `scdaemon` can interfere with SSH by locking the smartcard.  
+This hook restarts `pcscd` automatically after signed commits.
+This will free the YubiKey from `scdaemon` and allow SSH to work again.
+
+### Implementation
+
+Save this as `.git/hooks/post-commit` in your repo:
+
+```sh
+#!/bin/sh
+# Workaround: GPG/scdaemon can lock smartcard → restart pcscd on signed commits
+
+set -eu
+
+DEBUG="${DEBUG:-0}"
+
+log_debug() {
+  [ "$DEBUG" = "1" ] && echo "[DEBUG] $*"
+}
+
+SERVICE="$(command -v service || echo /usr/sbin/service)"
+log_debug "SERVICE=$SERVICE"
+
+[ -x "$SERVICE" ] || { echo "post-commit: missing $SERVICE" >&2; exit 1; }
+
+# Unsigned? say so and stop.
+if ! git cat-file -p HEAD | grep -q '^gpgsig '; then
+  echo "commit is unsigned, no additional action taken"
+  log_debug "HEAD is an unsigned commit, pcscd was NOT restarted"
+  exit 0
+fi
+
+# Use sudo -n if not root (visudo rule covers this), else call directly.
+if [ "$(id -u)" -eq 0 ]; then
+  RUN=""
+else
+  RUN="sudo -n"
+fi
+log_debug "RUN='$RUN'"
+
+if $RUN "$SERVICE" pcscd restart >/dev/null 2>&1; then
+  echo "pcscd reset"
+  log_debug "HEAD is a signed commit, pcscd restart successful"
+else
+  rc=$?
+  echo "post-commit: failed to restart pcscd (exit $rc)" >&2
+  log_debug "pcscd restart failed with exit code $rc"
+  exit "$rc"
+fi
+```
+
+Make it executable:
+
+```bash
+chmod +x .git/hooks/post-commit
+```
+
+## Reusing in Another Repo
+
+From a repo that already has the hook:
+
+```bash
+cp .git/hooks/post-commit /path/to/other-repo/.git/hooks/
+chmod +x /path/to/other-repo/.git/hooks/post-commit
+```
+
+# Entire Guide Tested On
 
 ![Windows 11 Pro 22H2](https://img.shields.io/badge/Windows-11%20Pro%2022H2-blue?logo=windows)
 ![WSL2 Ubuntu 22.04](https://img.shields.io/badge/WSL2-Ubuntu%2022.04-green?logo=ubuntu)
