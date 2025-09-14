@@ -20,7 +20,7 @@
   - [Configure SSH](#configure-ssh-in-wsl)
   - [Test & Daily Use](#test)
 - [Troubleshooting](#troubleshooting)
-  - [GPG/scdaemon Conflicts](#gpg-and-scdaemon-can-break-ssh)
+  - [Broken SSH After Using GPG](#gpg-and-scdaemon-will-break-ssh)
 
 --- 
 > 💡 *__This guide focuses on SSH with YubiKey.__*  
@@ -32,6 +32,7 @@
   
 ---
 
+&nbsp;
 # Yubikey-WSL
 A guide for working with the Yubikey 5 Series hardware keys in WSL2 on Windows 11. Many of these techniques can be applied to Linux, MacOS or Windows 11 as well. The baseline flow of this document will walk you through initial setup of the binaries and helpers required and then walk you through the generation of a private SSH key on the YubiKey itself. There are also sections further on in the guide for GPG signing for verified github commits and storage of Bot/service PEMs for GitHub Apps, etc..
 
@@ -48,8 +49,8 @@ The YubiKey 5 series runs several independent applets:
 
 This guide focuses on **OpenPGP** and **PIV**, which are needed for SSH, GPG signing, and certificates. **FIDO2**, **OATH**, and **OTP** are mainly for web authentication and will not be covered.  
 
-#### ⚠️ Note: 
-GPG can cause a lockout by taking exclusive control of the OpenPGP applet, interfering with PIV/PKCS#11 usage. The [workaround](#gpg-and-scdaemon-can-break-ssh) is to run a small helper shell function after using GPG so the key is freed again for SSH. 
+> ### ⚠️ Note: 
+> GPG can cause a lockout by taking exclusive control of the OpenPGP applet, interfering with PIV/PKCS#11 usage. The [workaround](#gpg-and-scdaemon-can-break-ssh) is to run a small helper shell function after using GPG so the key is freed again for SSH. 
 
 ---
 
@@ -109,8 +110,7 @@ ykman piv access change-puk
 - **Forgot PUK but still know PIN:** Device remains usable for daily operations, but if the PIN is lost in the future, the PIV applet must be reset.  
 - **Forgot both PIN and PUK:** The PIV applet must be reset, which **erases all keys** in PIV slots.
 
----
-
+# &nbsp;
 #### Best Practices
 
 - PIN and PUK **must** be changed from defaults on first use.  
@@ -118,7 +118,8 @@ ykman piv access change-puk
 - Use different values for PIN and PUK.  
 - Never share PIN or PUK outside of approved storage methods.  
 
-## Why PIV and not FIDO2 for SSH?
+# &nbsp;
+# Why PIV and not FIDO2 for SSH?
  1. **Private key never leaves the YubiKey**
     - With PIV, the keypair is generated on the YubiKey itself in slot 82.
     - The private key is non-exportable by design — it can’t ever be written out to the host machine.
@@ -132,7 +133,7 @@ ykman piv access change-puk
     - That makes it easy to standardize across employees (e.g., “all GitHub keys go in slot 82”).
     - FIDO2 doesn’t expose slot numbers in the same way, rather, its system is more opaque.
    
-### PIV vs FIDO2 Key Storage
+## PIV vs FIDO2 Key Storage
   
 | Feature                  | PIV (PKCS#11)                                | FIDO2                                   |
 |---------------------------|----------------------------------------------|-----------------------------------------|
@@ -148,7 +149,7 @@ ykman piv access change-puk
 PIV provides predictable, slot-based key management with more independent slots, making it easier to standardize usage across teams.  
 FIDO2 is credential-based with fewer total slots, less transparency, and requires newer OpenSSH tooling, though it offers modern security benefits.
 
----
+# &nbsp;
 # Getting started with SSH
 ## Assumptions
 - Windows 10/11 + WSL2 (Ubuntu/Debian).
@@ -340,9 +341,8 @@ Reload profile:
 yk2wsl
 ```
 
----
-
-## WSL Setup
+# &nbsp;
+# WSL Setup
 
 ### Update and install required packages
 ```bash
@@ -444,57 +444,57 @@ You will be prompted for your Yubikey PIN. If you did not set a PIN then it will
 - `ssh-keygen -D /usr/local/lib/libykcs11.so` should show an `ssh-rsa` key.
 - **After sleep/hibernate:** Windows may re-enumerate USB devices and reclaim the YubiKey. Run `ykstatus` to confirm. If it shows "Attached to Windows", run `yk2wsl` again.
 
-## ⚠️ GPG and scdaemon can break SSH ##
 
-When you use the YubiKey’s OpenPGP applet (for example, running `gpg --card-status`, generating keys, or listing keys), **GnuPG starts `scdaemon`** to manage the smart card.  
-The problem is: `scdaemon` takes exclusive control of the YubiKey, which prevents the PKCS#11 provider (`libykcs11.so`) from accessing the PIV slot.  
+# &nbsp;
 
-## Symptom
-After using `gpg`, your SSH authentication suddenly fails — `ssh` can no longer see your YubiKey key.
+<a id="gpg-and-scdaemon-will-break-ssh"></a>
+# ⚠️ GPG and scdaemon will break SSH
 
-## Quick Fix
-Kill `scdaemon` and restart the smart card service. Add this helper function to your shell config (`.zshrc` or `.bashrc`):
+When you use the YubiKey’s OpenPGP applet (for example, running `gpg --card-status`, generating keys, or listing keys), **GnuPG starts `scdaemon`** to manage the smart card. The blocking issue is that `scdaemon` takes exclusive control of the YubiKey, which prevents the PKCS#11 provider (`libykcs11.so`) from accessing the PIV slot.  
+
+### Symptom
+After using `gpg`, such as signing a `git` commit, you then try to push that commit to the repo and your SSH authentication suddenly fails — `ssh` can no longer see your YubiKey key.
+
+### Solution
+Use a git post-commit hook to free up the YubiKey for PKCS#11 provided SSH
+
+## Git Post-Commit Hook for YubiKey/GPG
+`gpg`/`scdaemon` will lock the smartcard and break PKCS#11 provided SSH. This hook restarts `pcscd` after signed commits so the YubiKey is free again. 
+
+> ### ⚠️ Note:
+> To to let the hook run unattended, add a sudoers rule so your user and the hook can restart the service without a password (security impact is low since it only grants control of `pcscd`)
+
+• Use `visudo`:
+```bash
+sudo visudo -f /etc/sudoers.d/pcscd
+```
+• Add:
+```bash
+# /etc/sudoers.d/pcscd
+<your-username> ALL=(root) NOPASSWD: /usr/sbin/service pcscd restart
+```
+• Put the git post-commit hook in your template so all new repos inherit it:
 
 ```bash
-# Free YubiKey from scdaemon and restart pcscd so PKCS#11 can use it
-yk-ssh() {
-  gpgconf --kill scdaemon
-  # WSL/Ubuntu: restart smart-card service (requires sudo)
-  sudo service pcscd restart
-  echo "YubiKey released from scdaemon; PKCS#11 ready for SSH."
-}
+mkdir -p ~/.git-template/hooks
+nano ~/.git-template/hooks/post-commit
 ```
 
-Reload your shell after editing (`source ~/.zshrc` or `source ~/.bashrc`).  
-
-## Usage
-Whenever you finish using GPG commands (like creating or listing keys) and want to go back to SSH with PKCS#11, run:
-
+• Paste in the hook and make it executable:
 ```bash
-yk-ssh
+chmod +x ~/.git-template/hooks/post-commit
 ```
-
-## Robust Fix
-### Git Post-Commit Hook for YubiKey/GPG
-
-GPG and `scdaemon` can interfere with SSH by locking the smartcard.  
-This hook restarts `pcscd` automatically after signed commits.
-This will free the YubiKey from `scdaemon` and allow SSH to work again.
-
-### Implementation
-
-Save this as `.git/hooks/post-commit` in your repo:
-
+### Git Post-Commit Hook
+#### `~/.git-template/hooks/post-commit`
 ```sh
 #!/bin/sh
 # Workaround: GPG/scdaemon can lock smartcard → restart pcscd on signed commits
-
 set -eu
-
 DEBUG="${DEBUG:-0}"
 
 log_debug() {
-  [ "$DEBUG" = "1" ] && echo "[DEBUG] $*"
+  [ "${DEBUG:-0}" = "1" ] || return 0
+  echo "[DEBUG] $*" >&2
 }
 
 SERVICE="$(command -v service || echo /usr/sbin/service)"
@@ -508,7 +508,6 @@ if ! git cat-file -p HEAD | grep -q '^gpgsig '; then
   log_debug "HEAD is an unsigned commit, pcscd was NOT restarted"
   exit 0
 fi
-
 # Use sudo -n if not root (visudo rule covers this), else call directly.
 if [ "$(id -u)" -eq 0 ]; then
   RUN=""
@@ -527,20 +526,35 @@ else
   exit "$rc"
 fi
 ```
-
-Make it executable:
+## Update Existing Repos
+If needed, copy the hook into repos created earlier (run inside the repo root):
 
 ```bash
+cp ~/.git-template/hooks/post-commit .git/hooks/post-commit
 chmod +x .git/hooks/post-commit
 ```
 
-## Reusing in Another Repo
-
-From a repo that already has the hook:
+## Optional Helper
+Add this to `~/.zshrc` or `~/.bashrc` for a quick one-liner to sync the hook into the current repo:
 
 ```bash
-cp .git/hooks/post-commit /path/to/other-repo/.git/hooks/
-chmod +x /path/to/other-repo/.git/hooks/post-commit
+sync-hook() {
+  cp ~/.git-template/hooks/post-commit .git/hooks/post-commit
+  chmod +x .git/hooks/post-commit
+  echo "Hook synced into $(git rev-parse --show-toplevel)"
+}
+```
+## Quick Fix
+You can also set this workaround up for times where you want to use it without a git hook (such as random troubleshooting).
+
+Add this helper function to your shell config (`.zshrc` or `.bashrc`):
+
+```bash
+# Free YubiKey from scdaemon and restart pcscd so PKCS#11 can use it
+yk-ssh() {
+  gpgconf --kill scdaemon
+  sudo service pcscd restart
+}
 ```
 
 # Entire Guide Tested On
