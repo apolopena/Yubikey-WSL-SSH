@@ -5,7 +5,7 @@
 
 ## Table of Contents
 
-- [YubiKey-WSL](#yubikey-wsl)
+- [YubiKey-WSL-Guides](#yubikey-wsl-guides)
   - [Slots](#yubikey-slots)
   - [Remove PIN Defaults](#remove-yubikey-pin-defaults)
   - [Why PIV for SSH?](#why-piv-and-not-fido2-for-ssh)
@@ -35,8 +35,8 @@
 ---
 
 &nbsp;
-# YubiKey-WSL
-This is a detailed guide for working with the YubiKey 5 Series hardware keys in WSL2 on Windows 11. Many of these techniques can be applied to Linux, macOS, or Windows 11 as well. The baseline flow of this document will walk you through initial setup of the binaries and helpers required, and the generation of a private SSH key on the YubiKey itself. There are also sections further on in the guide for GPG signing for verified GitHub commits and storage of bot/service PEMs for GitHub Apps, etc.
+# YubiKey-WSL-guides
+This is a repository of detailed guides for working with the YubiKey 5 Series hardware keys in WSL2 on Windows 11. Many of these techniques can be applied to Linux, macOS, or Windows 11 as well. The baseline flow of this document will walk you through initial setup of the binaries and helpers required, and the generation of a private SSH key on the YubiKey itself. There are also sections further on in the guide for GPG signing for verified GitHub commits and storage of bot/service PEMs for GitHub Apps, etc.
 
 For an added level of security, ideally all YubiKey administration would be done on an air-gapped system such as Tails running on a RAM disk, but this step is beyond the scope of this guide.
 
