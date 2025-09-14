@@ -17,8 +17,9 @@
   - [Initialize PIV Slot 82](#initialize-piv-slot-82)
   - [Extract SSH Public Key](#extract-ssh-public-key)
   - [Add Key to GitHub](#add-key-to-github)
-  - [Configure SSH](#configure-ssh-in-wsl)
-  - [Test & Daily Use](#test)
+  - [Configure SSH in WSL](#configure-ssh-in-wsl)
+  - [Test](#test)
+  - [Daily Use Notes](#daily-use-notes)
 - [Troubleshooting](#troubleshooting)
   - [Broken SSH After Using GPG](#gpg-and-scdaemon-will-break-ssh)
 
@@ -27,17 +28,17 @@
 > 💡 *__This guide focuses on SSH with YubiKey.__*  
 >  
 > Related guides:  
-> • [YubiKey on WSL — GPG Signing Guide](./GPG_Signing_Guide.md)
-> • [YubiKey on WSL — GitHub App Key Guide (Part of the GitHub AI Workflow series)](./GitHub_App_Key_Guide.md)
+> • [YubiKey on WSL — GPG Signing Guide](./GPG_Signing_Guide.md)  
+> • [YubiKey on WSL — GitHub App Key Guide (Part of the GitHub AI Workflow series)](./GitHub_App_Key_Guide.md)  
 > • [GitHub AI Workflow series](GitHub_AI_Workflow.md)
   
 ---
 
 &nbsp;
 # YubiKey-WSL
-This is a detailed guide for working with the YubiKey 5 Series hardware keys in WSL2 on Windows 11. Many of these techniques can be applied to Linux, macOS or Windows 11 as well. The baseline flow of this document will walk you through initial setup of the binaries, helpers required and the generation of a private SSH key on the YubiKey itself. There are also sections further on in the guide for GPG signing for verified GitHub commits and storage of Bot/service PEMs for GitHub Apps, etc..
+This is a detailed guide for working with the YubiKey 5 Series hardware keys in WSL2 on Windows 11. Many of these techniques can be applied to Linux, macOS, or Windows 11 as well. The baseline flow of this document will walk you through initial setup of the binaries and helpers required, and the generation of a private SSH key on the YubiKey itself. There are also sections further on in the guide for GPG signing for verified GitHub commits and storage of bot/service PEMs for GitHub Apps, etc.
 
-For an added level of security, ideally all YubiKey administration would be done on an air-gapped system such as Tails running on a RAM Disk but this step is beyond the scope of this guide.
+For an added level of security, ideally all YubiKey administration would be done on an air-gapped system such as Tails running on a RAM disk, but this step is beyond the scope of this guide.
 
 ## YubiKey slots
 
@@ -50,7 +51,7 @@ The YubiKey 5 series runs several independent applets:
 
 This guide focuses on **OpenPGP** and **PIV**, which are needed for SSH, GPG signing, and certificates. **FIDO2**, **OATH**, and **OTP** are mainly for web authentication and will not be covered.  
 
-> ### ⚠️ Note: 
+> ### ⚠️ Note
 > GPG can cause a lockout by taking exclusive control of the OpenPGP applet, interfering with PIV/PKCS#11 usage. The [workaround](#gpg-and-scdaemon-will-break-ssh) is to run a small helper shell function after using GPG so the key is freed again for SSH. 
 
 ---
@@ -62,16 +63,16 @@ On YubiKey 5 series devices, PIV slots starting at 82 are labeled “retired” 
 - Code-signing certificates (different repos/products)
 - Per-environment separation (dedicate slots by project/org/env)
 
- YubiKey 5 series hardware keys also have 3 OpenPGP slots:
+YubiKey 5 series hardware keys also have 3 OpenPGP slots:
 
 - **Slot 1 (Signature)** – Sign files, emails, Git commits.  
 - **Slot 2 (Encryption)** – Decrypt emails/files.  
 - **Slot 3 (Authentication)** – General login/authentication (not used for SSH in this guide, since SSH will be handled via PIV slots with PKCS#11 for better compatibility and slot management).  
 
-Later in the guide we will use OpenPGP slot 1 for GitHub GPG-verified commits
+Later in the guide we will use OpenPGP slot 1 for GitHub GPG-verified commits.
 
 ## Remove YubiKey PIN defaults
-If you have not already done so, secure your YubiKey PIN and PUK
+If you have not already done so, secure your YubiKey PIN and PUK.
 
 #### PIN
 
@@ -91,7 +92,7 @@ ykman piv access change-pin
 
 #### PUK
 
-- **Purpose:** Used to reset the PIN if it is forgotten. Also known as the  Admin PIN. 
+- **Purpose:** Used to reset the PIN if it is forgotten. Also known as the Admin PIN. 
 - **Format:** Numeric only, length **8 digits**.  
 - **Default:** `12345678`.
 
@@ -132,7 +133,7 @@ ykman piv access change-puk
  3. **Predictable slot management**
     - PIV gives you numbered slots (82 = “Retired Key 1”), so you can document exactly where a key lives.
     - That makes it easy to standardize across employees (e.g., “all GitHub keys go in slot 82”).
-    - FIDO2 doesn’t expose slot numbers in the same way, rather, its system is more opaque.
+    - FIDO2 doesn’t expose slot numbers in the same way; its system is more opaque.
    
 ## PIV vs FIDO2 Key Storage
   
@@ -377,7 +378,7 @@ make -j"$(nproc)"
 sudo make install
 
 # Add /usr/local/lib to the system library search path so libykcs11.so is always found
-echo | sudo tee /etc/ld.so.conf.d/yubico-piv-tool.conf >/dev/null <<'EOF'
+sudo tee /etc/ld.so.conf.d/yubico-piv-tool.conf >/dev/null <<'EOF'
 /usr/local/lib
 EOF
 sudo ldconfig
@@ -387,9 +388,9 @@ sudo ldconfig
 
 ## Initialize PIV Slot 82
 
-With the YubiKey visible to Windows, generate an RSA-2048 keypair and a self-signed certificate. Use company convention for subject metadata:  
+With the YubiKey visible to **Windows**, generate an RSA-2048 keypair and a self-signed certificate. Use company convention for subject metadata:  
 `CN=<employee name>,O=<org>,OU=<division>`  
-(where *employee name* = your username, *org* = your organization and *division* = your department, e.g. Engineering).
+(where *employee name* = your username, *org* = your organization and *division* = your department, e.g., Engineering).
 
 ```powershell
 ykman piv keys generate -a RSA2048 82 - | ykman piv certificates generate 82 - "CN=<username>,O=<org>,OU=<division>"
@@ -428,9 +429,8 @@ Host github.com
 ```bash
 ssh -T git@github.com
 ```
-
 Expected:
-You will be prompted for your YubiKey PIN. If you did not set a PIN then it will be the default 123456. After entering the PIN you should see:
+You will be prompted for your YubiKey PIN. If you did not set a PIN, then it will be the default `123456`. After entering the PIN you should see:
 `Hi <your_user>! You’ve successfully authenticated, but GitHub does not provide shell access.`
 
 ---
@@ -445,7 +445,6 @@ You will be prompted for your YubiKey PIN. If you did not set a PIN then it will
 - `ssh-keygen -D /usr/local/lib/libykcs11.so` should show an `ssh-rsa` key.
 - **After sleep/hibernate:** Windows may re-enumerate USB devices and reclaim the YubiKey. Run `ykstatus` to confirm. If it shows "Attached to Windows", run `yk2wsl` again.
 
-
 # &nbsp;
 
 <a id="gpg-and-scdaemon-will-break-ssh"></a>
@@ -457,13 +456,13 @@ When you use the YubiKey’s OpenPGP applet (for example, running `gpg --card-st
 After using `gpg`, such as signing a `git` commit, you then try to push that commit to the repo and your SSH authentication suddenly fails — `ssh` can no longer see your YubiKey key.
 
 ### Solution
-Use a git post-commit hook to free up the YubiKey for PKCS#11 provided SSH
+Use a git post-commit hook to free up the YubiKey for PKCS#11-provided SSH.
 
 ## Git Post-Commit Hook for YubiKey/GPG
-`gpg`/`scdaemon` will lock the smartcard and break PKCS#11 provided SSH. This hook restarts `pcscd` after signed commits so the YubiKey is free again. 
+`gpg`/`scdaemon` will lock the smartcard and break PKCS#11-provided SSH. This hook restarts `pcscd` after signed commits so the YubiKey is free again. 
 
-> ### ⚠️ Note:
-> To let the hook run unattended, add a sudoers rule so your user and the hook can restart the service without a password (security impact is low since it grants control of __*only*__ `pcscd`)
+> ### ⚠️ Note
+> To let the hook run unattended, add a sudoers rule so your user and the hook can restart the service without a password (security impact is low since it grants control of __*only*__ `pcscd`).
 
 • Use `visudo`:
 ```bash
@@ -480,10 +479,16 @@ mkdir -p ~/.git-template/hooks
 nano ~/.git-template/hooks/post-commit
 ```
 
+• Make new repos use this template directory:
+```bash
+git config --global init.templateDir ~/.git-template
+```
+
 • Paste in the hook and make it executable:
 ```bash
 chmod +x ~/.git-template/hooks/post-commit
 ```
+
 ### Git Post-Commit Hook
 #### `~/.git-template/hooks/post-commit`
 ```sh
@@ -508,6 +513,7 @@ if ! git cat-file -p HEAD | grep -q '^gpgsig '; then
   log_debug "HEAD is an unsigned commit, pcscd was NOT restarted"
   exit 0
 fi
+
 # Use sudo -n if not root (visudo rule covers this), else call directly.
 if [ "$(id -u)" -eq 0 ]; then
   RUN=""
@@ -526,6 +532,7 @@ else
   exit "$rc"
 fi
 ```
+
 ## Update Existing Repos
 If needed, copy the hook into repos created earlier (run inside the repo root):
 
@@ -544,6 +551,7 @@ sync-hook() {
   echo "Hook synced into $(git rev-parse --show-toplevel)"
 }
 ```
+
 ## Quick Fix
 You can also set this workaround up for times where you want to use it without a git hook (such as random troubleshooting).
 
