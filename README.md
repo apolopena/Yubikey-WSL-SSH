@@ -33,10 +33,10 @@
 ---
 
 &nbsp;
-# Yubikey-WSL
-A guide for working with the Yubikey 5 Series hardware keys in WSL2 on Windows 11. Many of these techniques can be applied to Linux, MacOS or Windows 11 as well. The baseline flow of this document will walk you through initial setup of the binaries and helpers required and then walk you through the generation of a private SSH key on the YubiKey itself. There are also sections further on in the guide for GPG signing for verified github commits and storage of Bot/service PEMs for GitHub Apps, etc..
+# YubiKey-WSL
+A guide for working with the YubiKey 5 Series hardware keys in WSL2 on Windows 11. Many of these techniques can be applied to Linux, MacOS or Windows 11 as well. The baseline flow of this document will walk you through initial setup of the binaries and helpers required and then walk you through the generation of a private SSH key on the YubiKey itself. There are also sections further on in the guide for GPG signing for verified github commits and storage of Bot/service PEMs for GitHub Apps, etc..
 
-For an added level of security, ideally all Yubikey adminstration would be done on an air-gapped system such as Tails running on the RAMDisk but this step is beyond the scope of this guide.
+For an added level of security, ideally all YubiKey administration would be done on an air-gapped system such as Tails running on the RAMDisk but this step is beyond the scope of this guide.
 
 ## YubiKey slots
 
@@ -70,7 +70,7 @@ On YubiKey 5 series devices, PIV slots starting at 82 are labeled “retired” 
 Later in the guide we will use OpenPGP slot 1 for GitHub GPG-verified commits
 
 ## Remove YubiKey PIN defaults
-If youhave not already done so, secure your YubiKey PIN and PUK
+If you have not already done so, secure your YubiKey PIN and PUK
 
 #### PIN
 
@@ -114,7 +114,7 @@ ykman piv access change-puk
 #### Best Practices
 
 - PIN and PUK **must** be changed from defaults on first use.  
-- Store both in the in a secure password vault such as KeepassXC, with a sealed paper backup held in another secure location or by your by IT/security department.  
+- Store both in the in a secure password vault such as KeepassXC, with a sealed paper backup held in another secure location or given to your IT/security department.  
 - Use different values for PIN and PUK.  
 - Never share PIN or PUK outside of approved storage methods.  
 
@@ -387,8 +387,8 @@ sudo ldconfig
 ## Initialize PIV Slot 82
 
 With the YubiKey visible to Windows, generate an RSA-2048 keypair and a self-signed certificate. Use company convention for subject metadata:  
-`CN=<employee name>,O=LearnStream,OU=<division>`  
-(where *employee name* = your username and *division* = your department, e.g. Engineering).
+`CN=<employee name>,O=<org>,OU=<division>`  
+(where *employee name* = your username, *org* = your organization and *division* = your department, e.g. Engineering).
 
 ```powershell
 ykman piv keys generate -a RSA2048 82 - | ykman piv certificates generate 82 - "CN=<username>,O=LearnStream,OU=<division>"
@@ -429,7 +429,7 @@ ssh -T git@github.com
 ```
 
 Expected:
-You will be prompted for your Yubikey PIN. If you did not set a PIN then it will be the default 123456. After entering the PIN you should see:
+You will be prompted for your YubiKey PIN. If you did not set a PIN then it will be the default 123456. After entering the PIN you should see:
 `Hi <your_user>! You’ve successfully authenticated, but GitHub does not provide shell access.`
 
 ---
@@ -462,7 +462,7 @@ Use a git post-commit hook to free up the YubiKey for PKCS#11 provided SSH
 `gpg`/`scdaemon` will lock the smartcard and break PKCS#11 provided SSH. This hook restarts `pcscd` after signed commits so the YubiKey is free again. 
 
 > ### ⚠️ Note:
-> To to let the hook run unattended, add a sudoers rule so your user and the hook can restart the service without a password (security impact is low since it only grants control of `pcscd`)
+> To let the hook run unattended, add a sudoers rule so your user and the hook can restart the service without a password (security impact is low since it only grants control of `pcscd`)
 
 • Use `visudo`:
 ```bash
@@ -470,8 +470,7 @@ sudo visudo -f /etc/sudoers.d/pcscd
 ```
 • Add:
 ```bash
-# /etc/sudoers.d/pcscd
-<your-username> ALL=(root) NOPASSWD: /usr/sbin/service pcscd restart
+<YOUR-USERNAME> ALL=(root) NOPASSWD: /usr/sbin/service pcscd restart
 ```
 • Put the git post-commit hook in your template so all new repos inherit it:
 
