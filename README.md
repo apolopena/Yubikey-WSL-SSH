@@ -22,21 +22,22 @@
 - [Troubleshooting](#troubleshooting)
   - [Broken SSH After Using GPG](#gpg-and-scdaemon-will-break-ssh)
 
+&nbsp;
 --- 
 > 💡 *__This guide focuses on SSH with YubiKey.__*  
 >  
 > Related guides:  
-> • [YubiKey on WSL — GPG Signing Guide](./GPG_Signing_Guide.md)  
-> • [YubiKey on WSL — GitHub App Key Guide (Part of the GitHub AI Workflow series)](./GitHub_App_Key_Guide.md) 
+> • [YubiKey on WSL — GPG Signing Guide](./GPG_Signing_Guide.md)
+> • [YubiKey on WSL — GitHub App Key Guide (Part of the GitHub AI Workflow series)](./GitHub_App_Key_Guide.md)
 > • [GitHub AI Workflow series](GitHub_AI_Workflow.md)
   
 ---
 
 &nbsp;
 # YubiKey-WSL
-A guide for working with the YubiKey 5 Series hardware keys in WSL2 on Windows 11. Many of these techniques can be applied to Linux, MacOS or Windows 11 as well. The baseline flow of this document will walk you through initial setup of the binaries and helpers required and then walk you through the generation of a private SSH key on the YubiKey itself. There are also sections further on in the guide for GPG signing for verified github commits and storage of Bot/service PEMs for GitHub Apps, etc..
+This is a detailed guide for working with the YubiKey 5 Series hardware keys in WSL2 on Windows 11. Many of these techniques can be applied to Linux, macOS or Windows 11 as well. The baseline flow of this document will walk you through initial setup of the binaries, helpers required and the generation of a private SSH key on the YubiKey itself. There are also sections further on in the guide for GPG signing for verified GitHub commits and storage of Bot/service PEMs for GitHub Apps, etc..
 
-For an added level of security, ideally all YubiKey administration would be done on an air-gapped system such as Tails running on the RAMDisk but this step is beyond the scope of this guide.
+For an added level of security, ideally all YubiKey administration would be done on an air-gapped system such as Tails running on a RAM Disk but this step is beyond the scope of this guide.
 
 ## YubiKey slots
 
@@ -50,7 +51,7 @@ The YubiKey 5 series runs several independent applets:
 This guide focuses on **OpenPGP** and **PIV**, which are needed for SSH, GPG signing, and certificates. **FIDO2**, **OATH**, and **OTP** are mainly for web authentication and will not be covered.  
 
 > ### ⚠️ Note: 
-> GPG can cause a lockout by taking exclusive control of the OpenPGP applet, interfering with PIV/PKCS#11 usage. The [workaround](#gpg-and-scdaemon-can-break-ssh) is to run a small helper shell function after using GPG so the key is freed again for SSH. 
+> GPG can cause a lockout by taking exclusive control of the OpenPGP applet, interfering with PIV/PKCS#11 usage. The [workaround](#gpg-and-scdaemon-will-break-ssh) is to run a small helper shell function after using GPG so the key is freed again for SSH. 
 
 ---
 
@@ -114,7 +115,7 @@ ykman piv access change-puk
 #### Best Practices
 
 - PIN and PUK **must** be changed from defaults on first use.  
-- Store both in the in a secure password vault such as KeepassXC, with a sealed paper backup held in another secure location or given to your IT/security department.  
+- Store both in a secure password vault such as **KeePassXC**, with a sealed paper backup kept in another secure location or provided to your IT/security department. 
 - Use different values for PIN and PUK.  
 - Never share PIN or PUK outside of approved storage methods.  
 
@@ -123,7 +124,7 @@ ykman piv access change-puk
  1. **Private key never leaves the YubiKey**
     - With PIV, the keypair is generated on the YubiKey itself in slot 82.
     - The private key is non-exportable by design — it can’t ever be written out to the host machine.
-    - This aligned with any requirement where the private key must never touch the local machine.
+    - This aligns with any requirement where the private key must never touch the local machine.
  2. **SSH client compatibility**
     - OpenSSH supports PKCS#11 providers (ssh-keygen -D /usr/local/lib/libykcs11.so).
     - That means you can use the YubiKey PIV slot like a traditional SSH key without any patches or special drivers.
@@ -150,7 +151,7 @@ PIV provides predictable, slot-based key management with more independent slots,
 FIDO2 is credential-based with fewer total slots, less transparency, and requires newer OpenSSH tooling, though it offers modern security benefits.
 
 # &nbsp;
-# Getting started with SSH
+# Getting Started with SSH
 ## Assumptions
 - Windows 10/11 + WSL2 (Ubuntu/Debian).
 - You want RSA-2048 in PIV slot 82 via PKCS#11.
@@ -391,7 +392,7 @@ With the YubiKey visible to Windows, generate an RSA-2048 keypair and a self-sig
 (where *employee name* = your username, *org* = your organization and *division* = your department, e.g. Engineering).
 
 ```powershell
-ykman piv keys generate -a RSA2048 82 - | ykman piv certificates generate 82 - "CN=<username>,O=LearnStream,OU=<division>"
+ykman piv keys generate -a RSA2048 82 - | ykman piv certificates generate 82 - "CN=<username>,O=<org>,OU=<division>"
 ```
 
 ---
@@ -406,7 +407,7 @@ ssh-keygen -D /usr/local/lib/libykcs11.so 2>/dev/null | grep 'Retired Key 1'
 
 ## Add Key to GitHub
 - Go to GitHub → Settings → SSH and GPG keys → New SSH key
-- Title: `YUBIKEY - slot 82`
+- Title: `YUBIKEY - Slot 82`
 - Paste contents of the output from the previous command
 
 ---
@@ -439,7 +440,7 @@ You will be prompted for your YubiKey PIN. If you did not set a PIN then it will
 
 ---
 
-# Troubleshooting #
+# Troubleshooting
 - `pcsc_scan` should list the token.
 - `ssh-keygen -D /usr/local/lib/libykcs11.so` should show an `ssh-rsa` key.
 - **After sleep/hibernate:** Windows may re-enumerate USB devices and reclaim the YubiKey. Run `ykstatus` to confirm. If it shows "Attached to Windows", run `yk2wsl` again.
@@ -462,7 +463,7 @@ Use a git post-commit hook to free up the YubiKey for PKCS#11 provided SSH
 `gpg`/`scdaemon` will lock the smartcard and break PKCS#11 provided SSH. This hook restarts `pcscd` after signed commits so the YubiKey is free again. 
 
 > ### ⚠️ Note:
-> To let the hook run unattended, add a sudoers rule so your user and the hook can restart the service without a password (security impact is low since it only grants control of `pcscd`)
+> To let the hook run unattended, add a sudoers rule so your user and the hook can restart the service without a password (security impact is low since it grants control of __*only*__ `pcscd`)
 
 • Use `visudo`:
 ```bash
